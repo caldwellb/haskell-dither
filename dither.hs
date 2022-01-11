@@ -97,7 +97,7 @@ compilerOpts :: [String] -> IO (Options, [String])
 compilerOpts argv =
   case getOpt Permute options argv of
     (o,n,[]) -> return (foldl (flip id) defaultOptions o, n)
-    (_,_,errs) -> ioError (userError (concat errs ++ usageInfo header options))
+    (_,_,errs) -> putStrLn (concat errs ++ usageInfo header options) >> die "Arguments improperly formatted" 
   where header = "Usage: dither [OPTION..] file"
 
 main :: IO ()
@@ -106,7 +106,7 @@ main = do
   (o,args) <- compilerOpts argv
   case optInput o of
     Nothing    -> case args of
-                    []     -> ioError (userError (usageInfo ("Usage: dither [OPTION..] file") options))
+                    []     -> putStr (usageInfo ("Usage: dither [OPTION..] file") options) >> return ()
                     (x:xs) -> dither (optCutoff o) x >>= I.writeImage (optOutput o)
     Just strIn -> do
       image    <- dither (optCutoff o) (strIn)
