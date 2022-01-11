@@ -106,7 +106,7 @@ main = do
   (o,args) <- compilerOpts argv
   case optInput o of
     Nothing    -> case args of
-                    []     -> error "No input"
+                    []     -> ioError (userError (usageInfo ("Usage: dither [OPTION..] file") options))
                     (x:xs) -> dither (optCutoff o) x >>= I.writeImage (optOutput o)
     Just strIn -> do
       image    <- dither (optCutoff o) (strIn)
