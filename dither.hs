@@ -15,6 +15,7 @@ import System.Console.GetOpt
 import System.Exit
 import System.Environment
 import System.Random
+import System.FilePath
 
 import Control.Monad
 import Control.Monad.Primitive
@@ -150,11 +151,9 @@ main = do
                     then dither cutoff (rainbowClamp cutoff) 
                     else case (optTwoCol o) of
                            Just (dark, light) -> dither cutoff (clampTo cutoff dark light)
-                           Nothing            -> dither cutoff (clamp cutoff)
+                           Nothing            -> dither cutoff (clampTo cutoff (I.CS.PixelRGB 0 0 0) (I.CS.PixelRGB 1 1 1))
       targets    = case optInput o of
                      Nothing -> args
                      Just strIn -> strIn:args
   for_ targets $ \tgt -> do
-    I.readImage' tgt >>= ditherFunc >>= I.writeImage (prefix ++ (takeWhile (/= '.') tgt) ++ ".png")
-
-  
+    I.readImage' tgt >>= ditherFunc >>= I.writeImage (prefix ++ (takeBaseName tgt) ++ ".png")
