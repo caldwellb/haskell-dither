@@ -20,28 +20,21 @@ dither :: Double -> String -> IO (I.Image I.VU I.CS.Y Double)
 dither border file = do
   -- Read file as a greyscale (Y) image
   toDither <- I.readImageY I.VU file
-  
   -- Get the bounds so we can avoid out of bounds errors
   let (x, y)    = I.I.dims toDither
       imgBounds = ((0,0), (x - 1, y - 1))
-  
   -- Create a mutable copy of the image to work with
   algoImg <- I.I.thaw toDither
-  
   -- Loop over the x and y components of the image
   for_ (range imgBounds) $ \(x, y) -> do
-    
     -- Look at the current pixel
     oldPixel <- I.I.read algoImg (x,y)
-    
     -- Clamp the current pixel and get the error
     let newPixel = clamp 0.5 oldPixel
         quantErr = I.I.getPxC (oldPixel - newPixel) I.CS.LumaY 
-    
     -- Write the clamped pixel
     I.I.write algoImg (x,y) newPixel
-    
-    -- 
+    -- Overflow error into downstream pixels 
     when (inRange imgBounds (x  ,y+1)) 
          (I.I.read  algoImg (x  ,y+1) >>= \pxl -> 
           I.I.write algoImg (x  ,y+1) $ I.I.liftPx (\x -> x + (7.0/16.0 * quantErr)) pxl) 
@@ -55,10 +48,8 @@ dither border file = do
          (I.I.read  algoImg (x+1,y+1) >>= \pxl -> 
           I.I.write algoImg (x+1,y+1) $ I.I.liftPx (\x -> x + (1.0/16.0 * quantErr)) pxl) 
     return ()
-
-  output <- I.I.freeze algoImg
-
-  return output
+  -- No more modifications, freeze the image and return.
+  I.I.freeze algoImg
 
 data Flag = Input String
           | Output (Maybe String)
