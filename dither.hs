@@ -118,7 +118,7 @@ options =
       (NoArg (\opts -> opts {optRainbow = True}))
       "use random colors in place of white"
   
-  , Option "2" ["twocolor"]
+  , Option "t" ["twocolor"]
       (OptArg 
         (\arg opt -> opt { optTwoCol = readTwoCol <$> arg } ) "DOUBLE DOUBLE DOUBLE DOUBLE DOUBLE DOUBLE")
       "RGB for dark and light sections"
