@@ -85,7 +85,7 @@ data Options = Options { optInput   :: Maybe String
 
 defaultOptions :: Options
 defaultOptions = Options { optInput   = Nothing 
-                         , optOutput  = "dither.png"
+                         , optOutput  = "dither"
                          , optCutoff  = 0.5 
                          , optRainbow = False
                          , optTwoCol  = Nothing }
@@ -106,7 +106,7 @@ options =
       (ReqArg
         (\arg opt -> opt { optOutput = arg })
         "FILE")
-      "Output file"
+      "Output prefix"
 
   , Option "c" ["cutoff"]
       (ReqArg
@@ -120,7 +120,7 @@ options =
   
   , Option "t" ["twocolor"]
       (OptArg 
-        (\arg opt -> opt { optTwoCol = readTwoCol <$> arg } ) "DOUBLE DOUBLE DOUBLE DOUBLE DOUBLE DOUBLE")
+        (\arg opt -> opt { optTwoCol = readTwoCol <$> arg } ) "\"DOUBLE DOUBLE DOUBLE DOUBLE DOUBLE DOUBLE\"")
       "RGB for dark and light sections"
   ]
 
@@ -138,6 +138,7 @@ main = do
   (o,args) <- compilerOpts argv
   mapM_ putStrLn args
   let cutoff     = optCutoff o
+      prefix     = optOutput o
       ditherFunc = if (optRainbow o) 
                     then dither cutoff (rainbowClamp cutoff) 
                     else case (optTwoCol o) of
@@ -147,6 +148,6 @@ main = do
                      Nothing -> args
                      Just strIn -> strIn:args
   for_ targets $ \tgt -> do
-    I.readImage' tgt >>= ditherFunc >>= I.writeImage ("dither" ++ (takeWhile (/= '.') tgt) ++ ".png")
+    I.readImage' tgt >>= ditherFunc >>= I.writeImage (prefix ++ (takeWhile (/= '.') tgt) ++ ".png")
 
   
