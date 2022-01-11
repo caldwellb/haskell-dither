@@ -81,14 +81,16 @@ data Options = Options { optInput   :: Maybe String
                        , optOutput  :: String
                        , optCutoff  :: Double
                        , optRainbow :: Bool
-                       , optTwoCol  :: Maybe (I.Pixel I.RGB Double, I.Pixel I.RGB Double)}
+                       , optTwoCol  :: Maybe (I.Pixel I.RGB Double, I.Pixel I.RGB Double)
+                       , optHelp    :: Bool }
 
 defaultOptions :: Options
 defaultOptions = Options { optInput   = Nothing 
                          , optOutput  = "dither"
                          , optCutoff  = 0.5 
                          , optRainbow = False
-                         , optTwoCol  = Nothing }
+                         , optTwoCol  = Nothing
+                         , optHelp    = False }
 
 readTwoCol :: String -> (I.Pixel I.RGB Double, I.Pixel I.RGB Double)
 readTwoCol xs = 
@@ -98,7 +100,10 @@ readTwoCol xs =
 
 options :: [ OptDescr (Options -> Options) ]
 options =
-  [ Option "i" ["input"]
+  [ Option "h" ["help"]
+      (NoArg (\opt -> opt { optHelp = True } ))
+      "View this help dialogue"
+  , Option "i" ["input"]
       (OptArg (\arg opt -> opt { optInput = arg }) "FILE")
       "Input file"
 
@@ -120,7 +125,7 @@ options =
   
   , Option "t" ["twocolor"]
       (OptArg 
-        (\arg opt -> opt { optTwoCol = readTwoCol <$> arg } ) "\"DOUBLE DOUBLE DOUBLE DOUBLE DOUBLE DOUBLE\"")
+        (\arg opt -> opt { optTwoCol = readTwoCol <$> arg } ) "\"6 DOUBLES\"")
       "RGB for dark and light sections"
   ]
 
@@ -128,14 +133,16 @@ compilerOpts :: [String] -> IO (Options, [String])
 compilerOpts argv =
   case getOpt Permute options argv of
     (o,n,[]) -> return (foldl (flip id) defaultOptions o, n)
-    (_,_,errs) -> putStrLn (concat errs ++ usageInfo header options) >> die "" 
+    (_,_,errs) -> hPutStr stderr (concat errs ++ usageInfo header options) >> exitFailure 
   where header = "Usage: dither [OPTION..] file"
 
 main :: IO ()
 main = do
   argv     <- getArgs
-  print argv
   (o,args) <- compilerOpts argv
+  when (optHelp o) (do
+    hPutStr stderr (usageInfo "Usage: dither [OPTION..] file" options)
+    exitSuccess)
   mapM_ putStrLn args
   let cutoff     = optCutoff o
       prefix     = optOutput o
