@@ -21,11 +21,11 @@ import Control.Monad
 import Control.Monad.Primitive
 
 clamp :: (RealFrac e, I.I.ColorSpace cs e, Monad m) => e -> I.Pixel cs e -> m (I.Pixel cs e)
-clamp border pxl = return $ I.I.mapPxC (const $ (\x -> if x > border then 1 else 0) ) pxl
+clamp border = return . I.I.liftPx (\x -> if x > border then 1 else 0)
 
 rainbowClamp :: Double -> I.Pixel I.RGB Double -> IO (I.Pixel I.RGB Double)
 rainbowClamp border pxl = do
-  if I.CS.toPixelY pxl < I.CS.PixelY border then do
+  if sum pxl < border * 3 then do
     r <- randomRIO (0,0.5)
     g <- randomRIO (0,0.5)
     b <- randomRIO (0,0.5)
@@ -36,12 +36,22 @@ rainbowClamp border pxl = do
     b <- randomRIO (0.5,1)
     return (I.CS.PixelRGB r g b)
 
+rainbowStatic :: Double -> I.Pixel I.RGB Double -> IO (I.Pixel I.RGB Double)
+rainbowStatic border pxl = do
+  rc <- rainbowClamp border pxl
+  return (rc/2 + pxl/2)
+
 clampTo :: Double -> I.Pixel I.RGB Double -> I.Pixel I.RGB Double -> I.Pixel I.RGB Double -> IO (I.Pixel I.RGB Double)
-clampTo border dark light pxl = if I.CS.toPixelY pxl < I.CS.PixelY border then return dark else return light
+clampTo border dark light (I.CS.PixelRGB r g b)
+  | r > border && g > border && b > border = return light
+  | otherwise                              = return dark
+
+eightCol :: (I.I.ColorSpace cs e, Ord e) => e -> I.Pixel cs e -> IO (I.Pixel cs e)
+eightCol border = return . I.I.liftPx (\x -> if x > border then 1 else 0)  
 
 dither :: (RealFrac e, I.I.ColorSpace cs e, PrimMonad m) => 
-  e -> (I.Pixel cs e -> m (I.Pixel cs e)) -> I.Image I.VU cs e -> m (I.Image I.VU cs e) 
-dither bound strategy toDither = do
+  (I.Pixel cs e -> m (I.Pixel cs e)) -> I.Image I.VU cs e -> m (I.Image I.VU cs e) 
+dither strategy toDither = do
   -- Get the bounds so we can avoid out of bounds errors
   let (x, y)    = I.I.dims toDither
       imgBounds = ((0,0), (x - 1, y - 1))
@@ -53,8 +63,7 @@ dither bound strategy toDither = do
     oldPixel <- I.I.read algoImg (x,y)
     -- Clamp the current pixel and get the error
     newPixel <- strategy oldPixel
-    algPixel <- clamp bound oldPixel
-    let quantErr = oldPixel - algPixel
+    let quantErr = oldPixel - newPixel
     -- Write the clamped pixel
     I.I.write algoImg (x,y) newPixel
     -- Overflow error into downstream pixels 
@@ -80,18 +89,23 @@ data Flag = Input String
 
 data Options = Options { optInput   :: Maybe String
                        , optOutput  :: String
+                       , optFile    :: String
                        , optCutoff  :: Double
                        , optRainbow :: Bool
                        , optTwoCol  :: Maybe (I.Pixel I.RGB Double, I.Pixel I.RGB Double)
-                       , optHelp    :: Bool }
+                       , optHelp    :: Bool 
+                       , optEight   :: Bool }
+                       
 
 defaultOptions :: Options
 defaultOptions = Options { optInput   = Nothing 
                          , optOutput  = "dither"
+                         , optFile    = "png"
                          , optCutoff  = 0.5 
                          , optRainbow = False
                          , optTwoCol  = Nothing
-                         , optHelp    = False }
+                         , optHelp    = False 
+                         , optEight   = False}
 
 readTwoCol :: String -> (I.Pixel I.RGB Double, I.Pixel I.RGB Double)
 readTwoCol xs = 
@@ -101,33 +115,14 @@ readTwoCol xs =
 
 options :: [ OptDescr (Options -> Options) ]
 options =
-  [ Option "h" ["help"]
-      (NoArg (\opt -> opt { optHelp = True } ))
-      "View this help dialogue"
-  , Option "i" ["input"]
-      (OptArg (\arg opt -> opt { optInput = arg }) "FILE")
-      "Input file"
-
-  , Option "o" ["output"]
-      (ReqArg
-        (\arg opt -> opt { optOutput = arg })
-        "FILE")
-      "Output prefix"
-
-  , Option "c" ["cutoff"]
-      (ReqArg
-        (\arg opt -> opt { optCutoff = read arg})
-        "FLOAT")
-      "Indicates brightness cutoff"
-  
-  , Option "r" ["rainbow"]
-      (NoArg (\opts -> opts {optRainbow = True}))
-      "use random colors in place of white"
-  
-  , Option "t" ["twocolor"]
-      (OptArg 
-        (\arg opt -> opt { optTwoCol = readTwoCol <$> arg } ) "\"6 DOUBLES\"")
-      "RGB for dark and light sections"
+  [ Option "h" ["help"]     (NoArg  (\opt -> opt { optHelp = True } ))                                        "View this help dialogue"
+  , Option "i" ["input"]    (ReqArg (\arg opt -> opt { optInput = Just arg })               "FILE")           "Input file"
+  , Option "o" ["output"]   (ReqArg (\arg opt -> opt { optOutput = arg })                   "FILE")           "Output prefix"
+  , Option "f" ["filetype"] (ReqArg (\arg opt -> opt { optFile = arg })                     "FILETYPE")       "Output filetype" 
+  , Option "c" ["cutoff"]   (ReqArg (\arg opt -> opt { optCutoff = read arg})               "FLOAT")          "Indicates brightness cutoff"
+  , Option "r" ["rainbow"]  (NoArg  (\opts -> opts {optRainbow = True}))                                      "use random colors in place of white, has highest priority"  
+  , Option "e" ["eight"]    (NoArg  (\opts -> opts {optEight = True}))                                        "Use one bit for R,G,B colors, giving 8 total colors"
+  , Option "w" ["twocolor"] (ReqArg (\arg opt -> opt { optTwoCol = Just $ readTwoCol arg } ) "\"6 DOUBLES\"") "RGB for dark and light sections"
   ]
 
 compilerOpts :: [String] -> IO (Options, [String])
@@ -144,16 +139,17 @@ main = do
   when (optHelp o) (do
     hPutStr stderr (usageInfo "Usage: dither [OPTION..] file" options)
     exitSuccess)
-  mapM_ putStrLn args
   let cutoff     = optCutoff o
       prefix     = optOutput o
       ditherFunc = if (optRainbow o) 
-                    then dither cutoff (rainbowClamp cutoff) 
-                    else case (optTwoCol o) of
-                           Just (dark, light) -> dither cutoff (clampTo cutoff dark light)
-                           Nothing            -> dither cutoff (clampTo cutoff (I.CS.PixelRGB 0 0 0) (I.CS.PixelRGB 1 1 1))
+                    then dither (rainbowStatic cutoff) 
+                    else if (optEight o) 
+                          then dither (eightCol cutoff)
+                          else case (optTwoCol o) of
+                                Just (dark, light) -> dither (clampTo cutoff dark light)
+                                Nothing            -> dither (clampTo cutoff (I.CS.PixelRGB 0 0 0) (I.CS.PixelRGB 1 1 1))
       targets    = case optInput o of
                      Nothing -> args
                      Just strIn -> strIn:args
   for_ targets $ \tgt -> do
-    I.readImage' tgt >>= ditherFunc >>= I.writeImage (prefix ++ (takeBaseName tgt) ++ ".png")
+    I.readImage' tgt >>= ditherFunc >>= I.writeImage (prefix ++ (takeBaseName tgt) ++ "." ++ optFile o)
