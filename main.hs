@@ -41,7 +41,7 @@ defaultOptions = Options { optInput   = Nothing
 readTwoCol :: String -> (I.Pixel I.RGB Double, I.Pixel I.RGB Double)
 readTwoCol xs = 
   let vals = map read . words $ xs in
-      (I.CS.PixelRGB (vals !! 0) (vals !! 1) (vals !! 2) 
+      (I.CS.PixelRGB (head vals) (vals !! 1) (vals !! 2) 
       ,I.CS.PixelRGB (vals !! 3) (vals !! 4) (vals !! 5))
 
 options :: [ OptDescr (Options -> Options) ]
@@ -72,15 +72,14 @@ main = do
     exitSuccess)
   let cutoff     = optCutoff o
       prefix     = optOutput o
-      ditherFunc = if (optRainbow o) 
-                    then dither (rainbowStatic cutoff) 
-                    else if (optEight o) 
-                          then dither (eightCol cutoff)
-                          else case (optTwoCol o) of
-                                Just (dark, light) -> dither (clampTo cutoff dark light)
-                                Nothing            -> dither (clampTo cutoff (I.CS.PixelRGB 0 0 0) (I.CS.PixelRGB 1 1 1))
+      ditherFunc 
+        | optRainbow o = dither (rainbowStatic cutoff) 
+        | optEight o   = dither (eightCol cutoff)
+        | otherwise    = case optTwoCol o of
+                          Just (dark, light) -> dither (clampTo cutoff dark light)
+                          Nothing            -> dither (clampTo cutoff (I.CS.PixelRGB 0 0 0) (I.CS.PixelRGB 1 1 1))
       targets    = case optInput o of
                      Nothing -> args
                      Just strIn -> strIn:args
   for_ targets $ \tgt -> do
-    I.readImage' tgt >>= ditherFunc >>= I.writeImage (prefix ++ (takeBaseName tgt) ++ "." ++ optFile o)
+    I.readImage' tgt >>= ditherFunc >>= I.writeImage (prefix ++ takeBaseName tgt ++ "." ++ optFile o)
