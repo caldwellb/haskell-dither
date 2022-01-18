@@ -58,6 +58,7 @@ initializeKMeans dats k
   | otherwise = []
   where
     initRec :: [RGB] -> [RGB] -> Int -> [RGB]
+    initRec centroids _ 0 = centroids
     initRec centroids dats k = initRec (getNewCentroid centroids dats:centroids) dats (k - 1)
 
 getClosest :: RGB -> [RGB] -> RGB
@@ -78,17 +79,18 @@ getMean colors = constMult ( 1 / fromIntegral (length colors) ) ( foldl1 strictA
 kMeans :: Int -> [RGB] -> [RGB]
 kMeans k dats = let
   initialCentroids = initializeKMeans dats k
-  in initialCentroids
+  in kMeansRec 10 (cluster initialCentroids dats)
  where
-   kMeansRec :: M.Map RGB [RGB] -> [RGB]
-   kMeansRec oldMap = let
-    newCentroids = map getMean $ M.elems oldMap
-      in 
-      if newCentroids == M.keys oldMap 
-      then M.keys oldMap
-      else let
-           newMap = cluster newCentroids (concat $ M.elems oldMap)
-           in kMeansRec newMap
+  kMeansRec :: Int -> M.Map RGB [RGB] -> [RGB]
+  kMeansRec 0 map    = M.keys map
+  kMeansRec k oldMap = let
+   newCentroids = map getMean $ M.elems oldMap
+     in 
+     if newCentroids == M.keys oldMap 
+     then M.keys oldMap
+     else let
+          newMap = cluster newCentroids (concat $ M.elems oldMap)
+          in kMeansRec (k - 1) newMap
 
 approximateBy :: [RGB] -> RGBPixel -> RGBPixel
 approximateBy palette pixel = 

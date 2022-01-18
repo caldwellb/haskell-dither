@@ -14,7 +14,6 @@ import Control.Monad.Primitive
 dither :: (RealFrac e, I.I.ColorSpace cs e) => 
   (I.Pixel cs e -> IO (I.Pixel cs e)) -> I.Image I.VU cs e -> IO (I.Image I.VU cs e) 
 dither strategy toDither = do
-  putStrLn "Beginning dithering"
   -- Get the bounds so we can avoid out of bounds errors
   let (x, y)    = I.I.dims toDither
       imgBounds = ((0,0), (x - 1, y - 1))
