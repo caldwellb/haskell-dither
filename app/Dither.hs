@@ -11,9 +11,10 @@ import Control.Monad
 import Control.Monad.Primitive
 
 
-dither :: (RealFrac e, I.I.ColorSpace cs e, PrimMonad m) => 
-  (I.Pixel cs e -> m (I.Pixel cs e)) -> I.Image I.VU cs e -> m (I.Image I.VU cs e) 
+dither :: (RealFrac e, I.I.ColorSpace cs e) => 
+  (I.Pixel cs e -> IO (I.Pixel cs e)) -> I.Image I.VU cs e -> IO (I.Image I.VU cs e) 
 dither strategy toDither = do
+  putStrLn "Beginning dithering"
   -- Get the bounds so we can avoid out of bounds errors
   let (x, y)    = I.I.dims toDither
       imgBounds = ((0,0), (x - 1, y - 1))
@@ -31,16 +32,15 @@ dither strategy toDither = do
     -- Overflow error into downstream pixels 
     when (inRange imgBounds (x  ,y+1)) 
          (I.I.read  algoImg (x  ,y+1) >>= \pxl -> 
-          I.I.write algoImg (x  ,y+1) $ (pxl + (7/16 * quantErr))) 
+          I.I.write algoImg (x  ,y+1) (pxl + (7/16 * quantErr))) 
     when (inRange imgBounds (x+1,y-1)) 
          (I.I.read  algoImg (x+1,y-1) >>= \pxl -> 
-          I.I.write algoImg (x+1,y-1) $ (pxl + (3/16 * quantErr)))
+          I.I.write algoImg (x+1,y-1) (pxl + (3/16 * quantErr)))
     when (inRange imgBounds (x+1,y  )) 
          (I.I.read  algoImg (x+1,y  ) >>= \pxl -> 
-          I.I.write algoImg (x+1,y  ) $ (pxl + (5/16 * quantErr)))
+          I.I.write algoImg (x+1,y  ) (pxl + (5/16 * quantErr)))
     when (inRange imgBounds (x+1,y+1)) 
          (I.I.read  algoImg (x+1,y+1) >>= \pxl -> 
-          I.I.write algoImg (x+1,y+1) $ (pxl + (1/16 * quantErr)))
-    return ()
+          I.I.write algoImg (x+1,y+1) (pxl + (1/16 * quantErr)))
   -- No more modifications, freeze the image and return.
   I.I.freeze algoImg

@@ -17,10 +17,12 @@ import System.FilePath
 import Control.Monad
 
 import Data.Foldable
+import Data.Maybe
 
 data Options = Options { optInput   :: Maybe String
                        , optOutput  :: String
                        , optFile    :: String
+                       , optKMeans  :: Maybe Int
                        , optCutoff  :: Double
                        , optRainbow :: Bool
                        , optTwoCol  :: Maybe (I.Pixel I.RGB Double, I.Pixel I.RGB Double)
@@ -32,6 +34,7 @@ defaultOptions :: Options
 defaultOptions = Options { optInput   = Nothing 
                          , optOutput  = "dither"
                          , optFile    = "png"
+                         , optKMeans  = Nothing
                          , optCutoff  = 0.5 
                          , optRainbow = False
                          , optTwoCol  = Nothing
@@ -50,6 +53,7 @@ options =
   , Option "i" ["input"]    (ReqArg (\arg opt -> opt { optInput = Just arg })               "FILE")           "Input file"
   , Option "o" ["output"]   (ReqArg (\arg opt -> opt { optOutput = arg })                   "FILE")           "Output prefix"
   , Option "f" ["filetype"] (ReqArg (\arg opt -> opt { optFile = arg })                     "FILETYPE")       "Output filetype" 
+  , Option "k" ["kmeans"]   (ReqArg (\arg opt -> opt { optKMeans = Just $ read arg })       "INT")   "Gives a K-means based dithered approximation"
   , Option "c" ["cutoff"]   (ReqArg (\arg opt -> opt { optCutoff = read arg})               "FLOAT")          "Indicates brightness cutoff"
   , Option "r" ["rainbow"]  (NoArg  (\opts -> opts {optRainbow = True}))                                      "use random colors in place of white, has highest priority"  
   , Option "e" ["eight"]    (NoArg  (\opts -> opts {optEight = True}))                                        "Use one bit for R,G,B colors, giving 8 total colors"
@@ -73,6 +77,11 @@ main = do
   let cutoff     = optCutoff o
       prefix     = optOutput o
       ditherFunc 
+        | isJust (optKMeans o) = case optKMeans o of
+                                   Just k  -> (\img ->
+                                     let palette = kMeans k (map I.I.toComponents . concat . I.toLists $ img)
+                                      in dither (return . approximateBy palette) img )
+                                   Nothing -> error "K means has argument, but option -k was not set"
         | optRainbow o = dither (rainbowStatic cutoff) 
         | optEight o   = dither (eightCol cutoff)
         | otherwise    = case optTwoCol o of
