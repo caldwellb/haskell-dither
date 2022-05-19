@@ -71,7 +71,7 @@ main :: IO ()
 main = do
   argv     <- getArgs
   (o,args) <- compilerOpts argv
-  when (optHelp o) (do
+  when ((optHelp o) || (null argv)) (do
     hPutStr stderr (usageInfo "Usage: dither [OPTION..] file" options)
     exitSuccess)
   let cutoff     = optCutoff o
