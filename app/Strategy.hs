@@ -46,6 +46,10 @@ clampTo border dark light (I.CS.PixelRGB r g b)
 eightCol :: (I.I.ColorSpace cs e, Ord e) => e -> I.Pixel cs e -> IO (I.Pixel cs e)
 eightCol border = return . I.I.liftPx (\x -> if x > border then 1 else 0)  
 
+hotDog :: RGBPixel -> IO RGBPixel
+hotDog = return . approximateBy [ (1, 0, 0), (1, 1, 0) ]
+
+
 rgbEuclidDistance :: RGB -> RGB -> Double
 rgbEuclidDistance (r1, g1, b1) (r2, g2, b2) = sqrt ((r1 - r2)^2 + (g1 - g2)^2 + (b1 - b2)^2)
 
